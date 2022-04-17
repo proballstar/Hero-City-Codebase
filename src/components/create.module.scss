@@ -1,0 +1,39 @@
+.label {
+    color:rgb(96, 92, 92);
+    text-align: left;
+    justify-content: flex-start;
+    display: flex;
+}
+
+.input {
+    width: 100%;
+    border-width: 0px 0px 2px 0px;
+    border-color: rgb(96, 92, 92);
+    padding: 5px 5px 5px 5px;
+    margin: 15px;
+    color:gray;
+    text-align: start;
+    outline: none;
+}
+
+.submit {
+    padding-left: 30px;
+    padding-right: 30px;
+    padding-top: 20px;
+    padding-bottom: 20px;
+    border-radius: 20px;
+    background-color: orangered;
+    color: white
+}
+
+
+.container {
+    width: 30vw;
+    padding: 10px 10px 10px 10px;
+    box-shadow: 1px 1px 1px 1px;
+    border-radius: 7.5px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+}
+

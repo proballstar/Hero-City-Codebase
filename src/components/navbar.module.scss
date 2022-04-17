@@ -1,0 +1,39 @@
+@mixin alignment {
+    display: flex;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.section {
+    @include alignment();
+    height: 100vh;
+    width: 100vh;
+    display: flex;
+}
+
+.logo {
+    @include alignment();
+    width: 50px;
+    height: 50px;
+}
+
+.image {
+    border-radius: 100%;
+    width: 100px;
+    height: 100px;
+}
+
+.comp {
+    @include alignment();
+    width: 200px;
+}
+
+.wrapper {
+    width: 100%;
+    display: flex;
+}
+
+.tabs {
+    width: 50vh;
+    display: flex
+}
