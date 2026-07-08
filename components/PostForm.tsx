@@ -5,7 +5,11 @@ import { useRouter } from 'next/navigation'
 
 const MAX_IMAGE_BYTES = 2 * 1024 * 1024
 
-export default function CreatePostForm() {
+export default function PostForm({
+  post,
+}: {
+  post?: { id: string; name: string; content: string; hasImage: boolean }
+}) {
   const router = useRouter()
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -14,8 +18,7 @@ export default function CreatePostForm() {
     event.preventDefault()
     setError(null)
 
-    const form = event.currentTarget
-    const formData = new FormData(form)
+    const formData = new FormData(event.currentTarget)
     const image = formData.get('image') as File | null
     if (image && image.size > MAX_IMAGE_BYTES) {
       setError('Cover image must be 2 MB or smaller.')
@@ -24,13 +27,17 @@ export default function CreatePostForm() {
 
     setSubmitting(true)
     try {
-      const res = await fetch('/api/posts', { method: 'POST', body: formData })
+      const res = await fetch(post ? `/api/posts/${post.id}` : '/api/posts', {
+        method: post ? 'PATCH' : 'POST',
+        body: formData,
+      })
       const data = await res.json()
       if (!res.ok) {
-        setError(data.error ?? 'Failed to create the post.')
+        setError(data.error ?? 'Failed to save the post.')
         return
       }
       router.push(`/posts/${data.id}`)
+      router.refresh()
     } catch {
       setError('Network error — please try again.')
     } finally {
@@ -47,25 +54,22 @@ export default function CreatePostForm() {
         <label htmlFor="name" className="block text-sm font-semibold">
           Hero&apos;s name
         </label>
-        <input id="name" name="name" required maxLength={120} className={inputClass} />
-      </div>
-
-      <div>
-        <label htmlFor="authorName" className="block text-sm font-semibold">
-          Your name
-        </label>
         <input
-          id="authorName"
-          name="authorName"
+          id="name"
+          name="name"
           required
           maxLength={120}
+          defaultValue={post?.name}
           className={inputClass}
         />
       </div>
 
       <div>
         <label htmlFor="image" className="block text-sm font-semibold">
-          Cover image <span className="font-normal text-slate-500">(optional, max 2 MB)</span>
+          Cover image{' '}
+          <span className="font-normal text-slate-500">
+            ({post?.hasImage ? 'optional — replaces the current cover' : 'optional'}, max 2 MB)
+          </span>
         </label>
         <input
           id="image"
@@ -86,6 +90,7 @@ export default function CreatePostForm() {
           required
           rows={10}
           maxLength={20000}
+          defaultValue={post?.content}
           className={inputClass}
           placeholder="What makes this person a hero? Markdown is supported."
         />
@@ -100,7 +105,7 @@ export default function CreatePostForm() {
         disabled={submitting}
         className="rounded-full bg-brand-600 px-6 py-3 font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
       >
-        {submitting ? 'Publishing…' : 'Publish Post'}
+        {submitting ? 'Saving…' : post ? 'Save Changes' : 'Publish Post'}
       </button>
     </form>
   )

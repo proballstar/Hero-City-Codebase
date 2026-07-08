@@ -1,8 +1,11 @@
+import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { prisma } from '@/lib/prisma'
+import { auth } from '@/auth'
 import DonateSection from '@/components/DonateSection'
+import DeletePostButton from '@/components/DeletePostButton'
 
 export const dynamic = 'force-dynamic'
 
@@ -12,6 +15,7 @@ export default async function PostPage({
   params: Promise<{ id: string }>
 }) {
   const { id } = await params
+  const session = await auth()
   const post = await prisma.post.findUnique({
     where: { id },
     include: {
@@ -25,6 +29,7 @@ export default async function PostPage({
 
   if (!post) notFound()
 
+  const isAuthor = Boolean(session?.user?.id && post.authorId === session.user.id)
   const totalRaised = post.donations.reduce(
     (sum, donation) => sum + Number(donation.amount),
     0
@@ -51,6 +56,17 @@ export default async function PostPage({
               day: 'numeric',
             })}
           </p>
+          {isAuthor ? (
+            <div className="mt-4 flex items-center gap-2">
+              <Link
+                href={`/posts/${post.id}/edit`}
+                className="rounded-full border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:border-brand-500"
+              >
+                Edit
+              </Link>
+              <DeletePostButton postId={post.id} />
+            </div>
+          ) : null}
           <div className="prose prose-slate mt-6 max-w-none">
             <ReactMarkdown remarkPlugins={[remarkGfm]}>{post.content}</ReactMarkdown>
           </div>

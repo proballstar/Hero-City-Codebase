@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import Image from 'next/image'
+import AuthButtons from '@/components/AuthButtons'
 import './globals.css'
 
 export const metadata: Metadata = {
@@ -38,6 +39,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               >
                 Share a Hero
               </Link>
+              <AuthButtons />
             </nav>
           </div>
         </header>
