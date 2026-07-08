@@ -2,11 +2,11 @@
 
 Hero City is a community site for celebrating everyday heroes. Anyone can publish a
 story about a hero in their community (with a cover image and Markdown content),
-and readers can support that hero with a PayPal donation.
+and readers can support that hero with a donation through Stripe Checkout.
 
 Built with [Next.js 16](https://nextjs.org/) (App Router), [Prisma](https://www.prisma.io/)
 + PostgreSQL, [Tailwind CSS 4](https://tailwindcss.com/), and the
-[PayPal REST API](https://developer.paypal.com/docs/api/orders/v2/).
+[Stripe Checkout](https://docs.stripe.com/payments/checkout).
 
 ## Features
 
@@ -16,9 +16,10 @@ Built with [Next.js 16](https://nextjs.org/) (App Router), [Prisma](https://www.
   NextAuth/Auth.js). Authors can edit or delete their own posts.
 - **Cover images** — uploaded images (up to 2 MB) are stored in the database, so no
   external object-storage account is needed.
-- **PayPal donations** — donors pick a preset or custom amount; orders are created
-  and captured server-side and every donation is recorded in the database. Each
-  post shows its running total.
+- **Stripe donations** — donors pick a preset or custom amount and pay through
+  Stripe Checkout (cards, Apple Pay, Google Pay). Donations are recorded in the
+  database via webhook and on return from checkout; each post shows its running
+  total.
 
 ## Getting started
 
@@ -39,15 +40,16 @@ cp .env.example .env
 | Variable | Purpose |
 | --- | --- |
 | `DATABASE_URL` | PostgreSQL connection string |
-| `PAYPAL_ENV` | `sandbox` (default) or `live` |
-| `PAYPAL_CLIENT_ID` / `PAYPAL_CLIENT_SECRET` | REST credentials from the [PayPal developer dashboard](https://developer.paypal.com/dashboard/applications) |
-| `NEXT_PUBLIC_PAYPAL_CLIENT_ID` | Same client ID, exposed to the browser to render the PayPal buttons |
+| `STRIPE_SECRET_KEY` | Secret key from the [Stripe dashboard](https://dashboard.stripe.com/apikeys) — `sk_test_...` in development, `sk_live_...` in production |
+| `STRIPE_WEBHOOK_SECRET` | Signing secret for a [webhook endpoint](https://dashboard.stripe.com/webhooks) on `checkout.session.completed` pointing to `<origin>/api/stripe/webhook`. Optional locally |
 | `AUTH_SECRET` | Auth.js session secret — generate with `npx auth secret` |
 | `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET` | Google OAuth credentials ([console](https://console.cloud.google.com/apis/credentials); redirect URI `<origin>/api/auth/callback/google`) |
 | `AUTH_DEV_LOGIN` | `true` enables a passwordless dev-only sign-in provider. Never enable in production |
 
-The app runs without PayPal credentials — the donate section simply shows a
-"not configured" notice until they are set. The same applies to sign-in: without
+The app runs without Stripe credentials — the donate section simply shows a
+"not configured" notice until they are set. Donations are recorded twice-safe:
+the webhook is the reliable path, and the donor's return from checkout is a
+fallback, with idempotent upserts so double delivery is harmless. The same applies to sign-in: without
 auth credentials the site is read-only (browsing and donating still work).
 
 For local development without Google credentials, set `AUTH_DEV_LOGIN="true"`
@@ -69,7 +71,8 @@ Open [http://localhost:3000](http://localhost:3000).
 Any platform that runs Next.js works (Vercel, Railway, Fly.io, a VPS):
 
 1. Provision a Postgres database and set `DATABASE_URL`.
-2. Set the PayPal variables with **live** credentials and `PAYPAL_ENV=live`.
+2. Set `STRIPE_SECRET_KEY` to a live key and create a production webhook
+   endpoint for `checkout.session.completed` (set `STRIPE_WEBHOOK_SECRET`).
 3. Run `npm run db:migrate` (i.e. `prisma migrate deploy`) as part of your release step.
 4. `npm run build && npm start` (on Vercel this is automatic; `prisma generate` runs
    in the build script).
@@ -83,9 +86,10 @@ app/                    App Router pages and API routes
   posts/[id]/           Story page with Markdown content + donations
   api/posts/            List/create posts (multipart upload)
   api/images/[id]/      Serves cover images from the database
-  api/paypal/           Server-side order create + capture
+  api/stripe/checkout/  Creates Stripe Checkout sessions
+  api/stripe/webhook/   Records completed donations (signature-verified)
 components/             Client components (create form, donate section)
-lib/                    Prisma client singleton, PayPal REST helpers
+lib/                    Prisma client singleton, Stripe helpers
 prisma/                 Schema and migrations (Post, Image, Donation)
 ```
 
@@ -98,5 +102,5 @@ prisma/                 Schema and migrations (Post, Image, Donation)
 | `PATCH /api/posts/:id` | Update a post — author only |
 | `DELETE /api/posts/:id` | Delete a post — author only |
 | `GET /api/images/:id` | Cover image bytes |
-| `POST /api/paypal/orders` | Create a PayPal order (`{ postId, amount }`) |
-| `POST /api/paypal/orders/:orderId/capture` | Capture an approved order and record the donation |
+| `POST /api/stripe/checkout` | Start a Stripe Checkout session (`{ postId, amount }`), returns the redirect URL |
+| `POST /api/stripe/webhook` | Stripe webhook (`checkout.session.completed`) — records the donation |

@@ -1,30 +1,49 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
-import { PayPalScriptProvider, PayPalButtons } from '@paypal/react-paypal-js'
 
 const PRESET_AMOUNTS = ['5', '10', '25']
 
 export default function DonateSection({
   postId,
-  postName,
+  enabled,
 }: {
   postId: string
-  postName: string
+  enabled: boolean
 }) {
-  const clientId = process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID
-  const router = useRouter()
   const [amount, setAmount] = useState('5')
-  const [message, setMessage] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
-  if (!clientId) {
+  if (!enabled) {
     return (
       <p className="rounded-lg bg-amber-50 p-4 text-sm text-amber-800">
         Donations are not configured yet. The site owner needs to set{' '}
-        <code>NEXT_PUBLIC_PAYPAL_CLIENT_ID</code> (see the README).
+        <code>STRIPE_SECRET_KEY</code> (see the README).
       </p>
     )
+  }
+
+  async function donate() {
+    setBusy(true)
+    setError(null)
+    try {
+      const res = await fetch('/api/stripe/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ postId, amount }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setError(data.error ?? 'Could not start the checkout.')
+        return
+      }
+      window.location.href = data.url
+    } catch {
+      setError('Network error — please try again.')
+    } finally {
+      setBusy(false)
+    }
   }
 
   return (
@@ -58,41 +77,21 @@ export default function DonateSection({
         </div>
       </div>
 
-      {message ? (
-        <p className="mb-4 rounded-lg bg-green-50 p-4 text-sm text-green-800">
-          {message}
-        </p>
+      {error ? (
+        <p className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</p>
       ) : null}
 
-      <PayPalScriptProvider options={{ clientId, currency: 'USD', intent: 'capture' }}>
-        <PayPalButtons
-          style={{ layout: 'vertical', label: 'donate' }}
-          forceReRender={[amount]}
-          createOrder={async () => {
-            const res = await fetch('/api/paypal/orders', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ postId, amount }),
-            })
-            const data = await res.json()
-            if (!res.ok) throw new Error(data.error ?? 'Failed to create order')
-            return data.orderId
-          }}
-          onApprove={async (data) => {
-            const res = await fetch(`/api/paypal/orders/${data.orderID}/capture`, {
-              method: 'POST',
-            })
-            const result = await res.json()
-            if (!res.ok) throw new Error(result.error ?? 'Failed to capture order')
-            setMessage(`Thank you for supporting ${postName}!`)
-            router.refresh()
-          }}
-          onError={(err) => {
-            console.error(err)
-            setMessage('Something went wrong with the donation. Please try again.')
-          }}
-        />
-      </PayPalScriptProvider>
+      <button
+        type="button"
+        onClick={donate}
+        disabled={busy}
+        className="rounded-full bg-brand-600 px-6 py-3 font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
+      >
+        {busy ? 'Redirecting…' : 'Donate with Stripe'}
+      </button>
+      <p className="mt-2 text-xs text-slate-500">
+        You&apos;ll be taken to Stripe&apos;s secure checkout to complete the donation.
+      </p>
     </div>
   )
 }

@@ -4,6 +4,7 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/auth'
+import { getStripe, recordCompletedSession, stripeConfigured } from '@/lib/stripe'
 import DonateSection from '@/components/DonateSection'
 import DeletePostButton from '@/components/DeletePostButton'
 
@@ -11,11 +12,30 @@ export const dynamic = 'force-dynamic'
 
 export default async function PostPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>
+  searchParams: Promise<{ session_id?: string }>
 }) {
   const { id } = await params
+  const { session_id: checkoutSessionId } = await searchParams
   const session = await auth()
+
+  // Returning from Stripe Checkout: record the donation immediately so the
+  // donor sees it reflected even if the webhook hasn't arrived yet.
+  let justDonated = false
+  if (checkoutSessionId && stripeConfigured()) {
+    try {
+      const checkout = await getStripe().checkout.sessions.retrieve(checkoutSessionId)
+      if (checkout.payment_status === 'paid' && checkout.metadata?.postId === id) {
+        await recordCompletedSession(checkout)
+        justDonated = true
+      }
+    } catch (err) {
+      console.error('Could not verify checkout session', err)
+    }
+  }
+
   const post = await prisma.post.findUnique({
     where: { id },
     include: {
@@ -75,6 +95,11 @@ export default async function PostPage({
 
       <div className="mt-8 rounded-2xl border border-slate-200 bg-white p-6">
         <h2 className="text-xl font-bold">Support this hero</h2>
+        {justDonated ? (
+          <p className="mt-3 rounded-lg bg-green-50 p-4 text-sm text-green-800">
+            Thank you for supporting {post.name}! Your donation has been recorded.
+          </p>
+        ) : null}
         {totalRaised > 0 ? (
           <p className="mt-1 text-sm text-slate-600">
             ${totalRaised.toFixed(2)} raised from {post.donations.length}{' '}
@@ -86,7 +111,7 @@ export default async function PostPage({
           </p>
         )}
         <div className="mt-4">
-          <DonateSection postId={post.id} postName={post.name} />
+          <DonateSection postId={post.id} enabled={stripeConfigured()} />
         </div>
       </div>
     </article>

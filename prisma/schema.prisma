@@ -78,13 +78,15 @@ model Image {
 }
 
 model Donation {
-  id            String   @id @default(cuid())
-  post          Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
-  postId        String
-  amount        Decimal  @db.Decimal(10, 2)
-  currency      String   @default("USD")
-  paypalOrderId String   @unique
-  payerName     String?
-  status        String
-  createdAt     DateTime @default(now())
+  id          String   @id @default(cuid())
+  post        Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  postId      String
+  amount      Decimal  @db.Decimal(10, 2)
+  currency    String   @default("USD")
+  provider    String   @default("stripe")
+  /// Payment provider's reference (Stripe Checkout session id).
+  providerRef String   @unique
+  payerName   String?
+  status      String
+  createdAt   DateTime @default(now())
 }
