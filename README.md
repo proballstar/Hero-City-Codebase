@@ -1,34 +1,90 @@
-This is a [Next.js](https://nextjs.org/) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
+# Hero City
 
-## Getting Started
+Hero City is a community site for celebrating everyday heroes. Anyone can publish a
+story about a hero in their community (with a cover image and Markdown content),
+and readers can support that hero with a PayPal donation.
 
-First, run the development server:
+Built with [Next.js 16](https://nextjs.org/) (App Router), [Prisma](https://www.prisma.io/)
++ PostgreSQL, [Tailwind CSS 4](https://tailwindcss.com/), and the
+[PayPal REST API](https://developer.paypal.com/docs/api/orders/v2/).
+
+## Features
+
+- **Hero stories** — create, browse, and read posts. Story content supports
+  GitHub-flavored Markdown.
+- **Cover images** — uploaded images (up to 2 MB) are stored in the database, so no
+  external object-storage account is needed.
+- **PayPal donations** — donors pick a preset or custom amount; orders are created
+  and captured server-side and every donation is recorded in the database. Each
+  post shows its running total.
+
+## Getting started
+
+### 1. Prerequisites
+
+- Node.js 20+
+- A PostgreSQL database (local install, Docker, or a hosted provider such as
+  [Neon](https://neon.tech), Supabase, or Railway)
+
+### 2. Configure environment
+
+Copy the example env file and fill it in:
 
 ```bash
-npm run dev
-# or
-yarn dev
+cp .env.example .env
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+| Variable | Purpose |
+| --- | --- |
+| `DATABASE_URL` | PostgreSQL connection string |
+| `PAYPAL_ENV` | `sandbox` (default) or `live` |
+| `PAYPAL_CLIENT_ID` / `PAYPAL_CLIENT_SECRET` | REST credentials from the [PayPal developer dashboard](https://developer.paypal.com/dashboard/applications) |
+| `NEXT_PUBLIC_PAYPAL_CLIENT_ID` | Same client ID, exposed to the browser to render the PayPal buttons |
 
-You can start editing the page by modifying `pages/index.tsx`. The page auto-updates as you edit the file.
+The app runs without PayPal credentials — the donate section simply shows a
+"not configured" notice until they are set.
 
-[API routes](https://nextjs.org/docs/api-routes/introduction) can be accessed on [http://localhost:3000/api/hello](http://localhost:3000/api/hello). This endpoint can be edited in `pages/api/hello.ts`.
+### 3. Install, migrate, run
 
-The `pages/api` directory is mapped to `/api/*`. Files in this directory are treated as [API routes](https://nextjs.org/docs/api-routes/introduction) instead of React pages.
+```bash
+npm install
+npm run db:migrate:dev   # creates/updates the database schema
+npm run dev
+```
 
-## Learn More
+Open [http://localhost:3000](http://localhost:3000).
 
-To learn more about Next.js, take a look at the following resources:
+## Deployment
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Any platform that runs Next.js works (Vercel, Railway, Fly.io, a VPS):
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js/) - your feedback and contributions are welcome!
+1. Provision a Postgres database and set `DATABASE_URL`.
+2. Set the PayPal variables with **live** credentials and `PAYPAL_ENV=live`.
+3. Run `npm run db:migrate` (i.e. `prisma migrate deploy`) as part of your release step.
+4. `npm run build && npm start` (on Vercel this is automatic; `prisma generate` runs
+   in the build script).
 
-## Deploy on Vercel
+## Project structure
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```
+app/                    App Router pages and API routes
+  page.tsx              Home — grid of hero stories
+  create/               "Share a Hero" form
+  posts/[id]/           Story page with Markdown content + donations
+  api/posts/            List/create posts (multipart upload)
+  api/images/[id]/      Serves cover images from the database
+  api/paypal/           Server-side order create + capture
+components/             Client components (create form, donate section)
+lib/                    Prisma client singleton, PayPal REST helpers
+prisma/                 Schema and migrations (Post, Image, Donation)
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/deployment) for more details.
+## API
+
+| Method & path | Description |
+| --- | --- |
+| `GET /api/posts` | List posts (id, name, author, image id) |
+| `POST /api/posts` | Create a post (`multipart/form-data`: `name`, `authorName`, `content`, optional `image`) |
+| `GET /api/images/:id` | Cover image bytes |
+| `POST /api/paypal/orders` | Create a PayPal order (`{ postId, amount }`) |
+| `POST /api/paypal/orders/:orderId/capture` | Capture an approved order and record the donation |

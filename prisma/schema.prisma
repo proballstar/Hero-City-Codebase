@@ -1,0 +1,41 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Post {
+  id         String     @id @default(cuid())
+  name       String
+  content    String
+  authorName String
+  image      Image?
+  donations  Donation[]
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+}
+
+/// Cover images are stored directly in the database so the app is
+/// self-contained — no external object storage account is required.
+model Image {
+  id       String @id @default(cuid())
+  data     Bytes
+  mimeType String
+  post     Post   @relation(fields: [postId], references: [id], onDelete: Cascade)
+  postId   String @unique
+}
+
+model Donation {
+  id            String   @id @default(cuid())
+  post          Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  postId        String
+  amount        Decimal  @db.Decimal(10, 2)
+  currency      String   @default("USD")
+  paypalOrderId String   @unique
+  payerName     String?
+  status        String
+  createdAt     DateTime @default(now())
+}
