@@ -39,8 +39,18 @@ if (process.env.AUTH_DEV_LOGIN === 'true') {
 
 export const authConfigured = providers.length > 0
 
+// Sessions are signed with AUTH_SECRET, so production must fail loudly when
+// it's missing. In development we fall back to a fixed value so a fresh
+// clone runs before any env vars are configured.
+let secret = process.env.AUTH_SECRET
+if (!secret && process.env.NODE_ENV !== 'production') {
+  secret = 'insecure-dev-secret-set-AUTH_SECRET'
+  console.warn('[auth] AUTH_SECRET is not set — using an insecure development-only fallback.')
+}
+
 export const { handlers, auth, signIn, signOut } = NextAuth({
   adapter: PrismaAdapter(prisma),
+  secret,
   session: { strategy: 'jwt' },
   trustHost: true,
   providers,
