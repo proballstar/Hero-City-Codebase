@@ -15,7 +15,17 @@ const nextConfig: NextConfig = {
   ...(codespacesDomain
     ? {
         experimental: {
-          serverActions: { allowedOrigins: [`*.${codespacesDomain}`] },
+          serverActions: {
+            // Requests arrive with mismatched origin/x-forwarded-host pairs in
+            // both directions: browser on the public URL with the dev server
+            // seeing localhost, or (VS Code port forwarding) browser on
+            // localhost with the proxy stamping the public host. Allow both.
+            allowedOrigins: [
+              `*.${codespacesDomain}`,
+              'localhost:3000',
+              '127.0.0.1:3000',
+            ],
+          },
         },
       }
     : {}),
