@@ -1,34 +1,106 @@
-This is a [Next.js](https://nextjs.org/) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
+# Hero City
 
-## Getting Started
+Hero City is a community site for celebrating everyday heroes. Anyone can publish a
+story about a hero in their community (with a cover image and Markdown content),
+and readers can support that hero with a donation through Stripe Checkout.
 
-First, run the development server:
+Built with [Next.js 16](https://nextjs.org/) (App Router), [Prisma](https://www.prisma.io/)
++ PostgreSQL, [Tailwind CSS 4](https://tailwindcss.com/), and the
+[Stripe Checkout](https://docs.stripe.com/payments/checkout).
+
+## Features
+
+- **Hero stories** — create, browse, and read posts. Story content supports
+  GitHub-flavored Markdown. The home page is paginated (12 stories per page).
+- **Sign-in and ownership** — publishing requires signing in (Google via
+  NextAuth/Auth.js). Authors can edit or delete their own posts.
+- **Cover images** — uploaded images (up to 2 MB) are stored in the database, so no
+  external object-storage account is needed.
+- **Stripe donations** — donors pick a preset or custom amount and pay through
+  Stripe Checkout (cards, Apple Pay, Google Pay). Donations are recorded in the
+  database via webhook and on return from checkout; each post shows its running
+  total.
+
+## Getting started
+
+### 1. Prerequisites
+
+- Node.js 20+
+- A PostgreSQL database (local install, Docker, or a hosted provider such as
+  [Neon](https://neon.tech), Supabase, or Railway)
+
+### 2. Configure environment
+
+Copy the example env file and fill it in:
 
 ```bash
-npm run dev
-# or
-yarn dev
+cp .env.example .env
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+| Variable | Purpose |
+| --- | --- |
+| `DATABASE_URL` | PostgreSQL connection string |
+| `STRIPE_SECRET_KEY` | Secret key from the [Stripe dashboard](https://dashboard.stripe.com/apikeys) — `sk_test_...` in development, `sk_live_...` in production |
+| `STRIPE_WEBHOOK_SECRET` | Signing secret for a [webhook endpoint](https://dashboard.stripe.com/webhooks) on `checkout.session.completed` pointing to `<origin>/api/stripe/webhook`. Optional locally |
+| `AUTH_SECRET` | Auth.js session secret — generate with `npx auth secret` |
+| `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET` | Google OAuth credentials ([console](https://console.cloud.google.com/apis/credentials); redirect URI `<origin>/api/auth/callback/google`) |
+| `AUTH_DEV_LOGIN` | `true` enables a passwordless dev-only sign-in provider. Never enable in production |
 
-You can start editing the page by modifying `pages/index.tsx`. The page auto-updates as you edit the file.
+The app runs without Stripe credentials — the donate section simply shows a
+"not configured" notice until they are set. Donations are recorded twice-safe:
+the webhook is the reliable path, and the donor's return from checkout is a
+fallback, with idempotent upserts so double delivery is harmless. The same applies to sign-in: without
+auth credentials the site is read-only (browsing and donating still work).
 
-[API routes](https://nextjs.org/docs/api-routes/introduction) can be accessed on [http://localhost:3000/api/hello](http://localhost:3000/api/hello). This endpoint can be edited in `pages/api/hello.ts`.
+For local development without Google credentials, set `AUTH_DEV_LOGIN="true"`
+and `AUTH_SECRET` to any string; the sign-in page then offers a "Dev Login"
+where you type a name and email.
 
-The `pages/api` directory is mapped to `/api/*`. Files in this directory are treated as [API routes](https://nextjs.org/docs/api-routes/introduction) instead of React pages.
+### 3. Install, migrate, run
 
-## Learn More
+```bash
+npm install
+npm run db:migrate:dev   # creates/updates the database schema
+npm run dev
+```
 
-To learn more about Next.js, take a look at the following resources:
+Open [http://localhost:3000](http://localhost:3000).
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Deployment
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js/) - your feedback and contributions are welcome!
+Any platform that runs Next.js works (Vercel, Railway, Fly.io, a VPS):
 
-## Deploy on Vercel
+1. Provision a Postgres database and set `DATABASE_URL`.
+2. Set `STRIPE_SECRET_KEY` to a live key and create a production webhook
+   endpoint for `checkout.session.completed` (set `STRIPE_WEBHOOK_SECRET`).
+3. Run `npm run db:migrate` (i.e. `prisma migrate deploy`) as part of your release step.
+4. `npm run build && npm start` (on Vercel this is automatic; `prisma generate` runs
+   in the build script).
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Project structure
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/deployment) for more details.
+```
+app/                    App Router pages and API routes
+  page.tsx              Home — grid of hero stories
+  create/               "Share a Hero" form
+  posts/[id]/           Story page with Markdown content + donations
+  api/posts/            List/create posts (multipart upload)
+  api/images/[id]/      Serves cover images from the database
+  api/stripe/checkout/  Creates Stripe Checkout sessions
+  api/stripe/webhook/   Records completed donations (signature-verified)
+components/             Client components (create form, donate section)
+lib/                    Prisma client singleton, Stripe helpers
+prisma/                 Schema and migrations (Post, Image, Donation)
+```
+
+## API
+
+| Method & path | Description |
+| --- | --- |
+| `GET /api/posts` | List posts, paginated (`?page=`, `?pageSize=` up to 50) |
+| `POST /api/posts` | Create a post — requires sign-in (`multipart/form-data`: `name`, `content`, optional `image`) |
+| `PATCH /api/posts/:id` | Update a post — author only |
+| `DELETE /api/posts/:id` | Delete a post — author only |
+| `GET /api/images/:id` | Cover image bytes |
+| `POST /api/stripe/checkout` | Start a Stripe Checkout session (`{ postId, amount }`), returns the redirect URL |
+| `POST /api/stripe/webhook` | Stripe webhook (`checkout.session.completed`) — records the donation |
