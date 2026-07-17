@@ -5,13 +5,19 @@ const TYPE_LABELS: Record<string, string> = {
   HERO_VIEWED: 'The hero viewed this story',
 }
 
+/** a•••@example.com — keeps accountability without exposing the address. */
+function maskEmail(email: string): string {
+  const [local, domain] = email.split('@')
+  return `${local.slice(0, 1)}•••@${domain}`
+}
+
 /**
- * Full activity log with actor names and emails. Only rendered for the
- * author and the hero — everyone else sees just the badges on the post.
+ * Public, collapsible activity log. Everyone can open it; email addresses
+ * are shown in full only to the author and the hero, masked for others.
  */
 export default function PostHistory({
   events,
-  heroEmail,
+  maskEmails,
 }: {
   events: {
     id: string
@@ -21,22 +27,14 @@ export default function PostHistory({
     isHero: boolean
     createdAt: Date
   }[]
-  heroEmail: string | null
+  maskEmails: boolean
 }) {
   return (
-    <div className="mt-8 rounded-2xl border border-slate-200 bg-white p-6">
-      <h2 className="text-xl font-bold">Post history</h2>
-      <p className="mt-1 text-sm text-slate-500">
-        Visible only to the author and the hero
-        {heroEmail ? (
-          <>
-            {' '}
-            (<span className="font-mono">{heroEmail}</span>)
-          </>
-        ) : null}
-        .
-      </p>
-      <ol className="mt-4 space-y-3">
+    <details className="mt-8 rounded-2xl border border-slate-200 bg-white open:pb-6">
+      <summary className="cursor-pointer select-none px-6 py-4 text-sm font-semibold text-slate-700 hover:text-slate-900">
+        Post history ({events.length})
+      </summary>
+      <ol className="space-y-3 px-6">
         {events.map((event) => (
           <li key={event.id} className="flex items-baseline gap-3 text-sm">
             <span className="whitespace-nowrap text-slate-400">
@@ -54,7 +52,10 @@ export default function PostHistory({
               </span>{' '}
               — {event.actorName}
               {event.actorEmail ? (
-                <span className="text-slate-500"> ({event.actorEmail})</span>
+                <span className="text-slate-500">
+                  {' '}
+                  ({maskEmails ? maskEmail(event.actorEmail) : event.actorEmail})
+                </span>
               ) : null}
               {event.isHero ? (
                 <span className="ml-2 rounded-full bg-green-50 px-2 py-0.5 text-xs font-semibold text-green-700">
@@ -65,6 +66,6 @@ export default function PostHistory({
           </li>
         ))}
       </ol>
-    </div>
+    </details>
   )
 }

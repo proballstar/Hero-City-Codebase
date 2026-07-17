@@ -160,9 +160,7 @@ export default async function PostPage({
         </div>
       </div>
 
-      {isAuthor || isHero ? (
-        <PostHistory events={post.events} heroEmail={post.heroEmail} />
-      ) : null}
+      <PostHistory events={post.events} maskEmails={!isAuthor && !isHero} />
     </article>
   )
 }
