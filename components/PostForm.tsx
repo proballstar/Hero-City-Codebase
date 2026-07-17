@@ -13,6 +13,7 @@ export default function PostForm({
   const router = useRouter()
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [storyType, setStoryType] = useState<'other' | 'own'>('other')
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -63,6 +64,64 @@ export default function PostForm({
           className={inputClass}
         />
       </div>
+
+      {!post ? (
+        <fieldset>
+          <legend className="block text-sm font-semibold">Whose story is this?</legend>
+          <div className="mt-2 space-y-2">
+            <label className="flex items-start gap-2 text-sm">
+              <input
+                type="radio"
+                name="storyType"
+                value="other"
+                checked={storyType === 'other'}
+                onChange={() => setStoryType('other')}
+                className="mt-0.5"
+              />
+              <span>
+                I&apos;m posting about someone else
+                <span className="block text-slate-500">
+                  Optionally add their email — they&apos;ll be invited to read the
+                  story, and signing in with that email lets them edit it so it
+                  reflects their own beliefs.
+                </span>
+              </span>
+            </label>
+            {storyType === 'other' ? (
+              <div className="ml-6">
+                <label htmlFor="heroEmail" className="block text-sm font-semibold">
+                  Hero&apos;s email{' '}
+                  <span className="font-normal text-slate-500">(optional)</span>
+                </label>
+                <input
+                  id="heroEmail"
+                  name="heroEmail"
+                  type="email"
+                  maxLength={254}
+                  className={inputClass}
+                  placeholder="hero@example.com"
+                />
+              </div>
+            ) : null}
+            <label className="flex items-start gap-2 text-sm">
+              <input
+                type="radio"
+                name="storyType"
+                value="own"
+                checked={storyType === 'own'}
+                onChange={() => setStoryType('own')}
+                className="mt-0.5"
+              />
+              <span>
+                This is my own story
+                <span className="block text-slate-500">
+                  You are the hero — the post is claimed by your account.
+                </span>
+              </span>
+            </label>
+          </div>
+        </fieldset>
+      ) : null}
 
       <div>
         <label htmlFor="image" className="block text-sm font-semibold">

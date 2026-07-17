@@ -5,8 +5,10 @@ import remarkGfm from 'remark-gfm'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/auth'
 import { getStripe, recordCompletedSession, stripeConfigured } from '@/lib/stripe'
+import { isHeroEmail, normalizeEmail } from '@/lib/hero'
 import DonateSection from '@/components/DonateSection'
 import DeletePostButton from '@/components/DeletePostButton'
+import PostHistory from '@/components/PostHistory'
 
 export const dynamic = 'force-dynamic'
 
@@ -44,12 +46,32 @@ export default async function PostPage({
         where: { status: 'COMPLETED' },
         orderBy: { createdAt: 'desc' },
       },
+      events: { orderBy: { createdAt: 'desc' } },
     },
   })
 
   if (!post) notFound()
 
   const isAuthor = Boolean(session?.user?.id && post.authorId === session.user.id)
+  const isHero = isHeroEmail(session?.user?.email, post.heroEmail)
+
+  // First time the hero opens their story, note it in the post history so the
+  // author can see the hero has engaged.
+  if (isHero && !isAuthor && !post.events.some((e) => e.type === 'HERO_VIEWED')) {
+    const event = await prisma.postEvent.create({
+      data: {
+        postId: post.id,
+        type: 'HERO_VIEWED',
+        actorName: session?.user?.name ?? session?.user?.email ?? 'The hero',
+        actorEmail: normalizeEmail(session?.user?.email),
+        isHero: true,
+      },
+    })
+    post.events.unshift(event)
+  }
+
+  const heroEdited = post.events.some((e) => e.type === 'EDITED' && e.isHero)
+  const heroViewed = heroEdited || post.events.some((e) => e.type === 'HERO_VIEWED')
   const totalRaised = post.donations.reduce(
     (sum, donation) => sum + Number(donation.amount),
     0
@@ -76,7 +98,30 @@ export default async function PostPage({
               day: 'numeric',
             })}
           </p>
-          {isAuthor ? (
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            {post.isOwnStory ? (
+              <span className="rounded-full bg-brand-100 px-3 py-1 text-xs font-semibold text-brand-700">
+                Told by the hero themself
+              </span>
+            ) : null}
+            {!post.isOwnStory && post.heroEmail ? (
+              heroViewed ? (
+                <span className="rounded-full bg-green-50 px-3 py-1 text-xs font-semibold text-green-700">
+                  ✓ The hero has seen this story
+                </span>
+              ) : (
+                <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-500">
+                  The hero hasn&apos;t seen this story yet
+                </span>
+              )
+            ) : null}
+            {!post.isOwnStory && heroEdited ? (
+              <span className="rounded-full bg-green-50 px-3 py-1 text-xs font-semibold text-green-700">
+                ✓ Edited by the hero
+              </span>
+            ) : null}
+          </div>
+          {isAuthor || isHero ? (
             <div className="mt-4 flex items-center gap-2">
               <Link
                 href={`/posts/${post.id}/edit`}
@@ -84,7 +129,7 @@ export default async function PostPage({
               >
                 Edit
               </Link>
-              <DeletePostButton postId={post.id} />
+              {isAuthor ? <DeletePostButton postId={post.id} /> : null}
             </div>
           ) : null}
           <div className="prose prose-slate mt-6 max-w-none">
@@ -114,6 +159,10 @@ export default async function PostPage({
           <DonateSection postId={post.id} enabled={stripeConfigured()} />
         </div>
       </div>
+
+      {isAuthor || isHero ? (
+        <PostHistory events={post.events} heroEmail={post.heroEmail} />
+      ) : null}
     </article>
   )
 }

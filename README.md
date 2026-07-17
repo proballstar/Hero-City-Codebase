@@ -14,6 +14,14 @@ Built with [Next.js 16](https://nextjs.org/) (App Router), [Prisma](https://www.
   GitHub-flavored Markdown. The home page is paginated (12 stories per page).
 - **Sign-in and ownership** — publishing requires signing in (Google via
   NextAuth/Auth.js). Authors can edit or delete their own posts.
+- **Hero claim & invites** — a post is either the author's own story or about
+  someone else, identified by email. The hero is emailed an invite (via
+  Resend, optional) and, once signed in with that email, can edit the story so
+  it reflects their own beliefs.
+- **Post history** — every post keeps an activity log (created/edited/invite
+  sent/hero viewed). The author and hero see the full log with names and
+  emails; everyone else sees privacy-safe badges like "the hero has seen this
+  story".
 - **Cover images** — uploaded images (up to 2 MB) are stored in the database, so no
   external object-storage account is needed.
 - **Stripe donations** — donors pick a preset or custom amount and pay through
@@ -45,6 +53,7 @@ cp .env.example .env
 | `AUTH_SECRET` | Auth.js session secret — generate with `npx auth secret` |
 | `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET` | Google OAuth credentials ([console](https://console.cloud.google.com/apis/credentials); redirect URI `<origin>/api/auth/callback/google`) |
 | `AUTH_DEV_LOGIN` | `true` enables a passwordless dev-only sign-in provider. Never enable in production |
+| `RESEND_API_KEY` / `EMAIL_FROM` | [Resend](https://resend.com) credentials for hero invite emails. Optional — invites are skipped without them |
 
 The app runs without Stripe credentials — the donate section simply shows a
 "not configured" notice until they are set. Donations are recorded twice-safe:

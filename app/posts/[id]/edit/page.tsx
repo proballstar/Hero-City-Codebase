@@ -1,6 +1,7 @@
 import { notFound, redirect } from 'next/navigation'
 import { auth } from '@/auth'
 import { prisma } from '@/lib/prisma'
+import { isHeroEmail } from '@/lib/hero'
 import PostForm from '@/components/PostForm'
 
 export const metadata = { title: 'Edit Post — Hero City' }
@@ -19,12 +20,15 @@ export default async function EditPostPage({
       name: true,
       content: true,
       authorId: true,
+      heroEmail: true,
       image: { select: { id: true } },
     },
   })
 
   if (!post) notFound()
-  if (!session?.user?.id || post.authorId !== session.user.id) {
+  const isAuthor = Boolean(session?.user?.id && post.authorId === session.user.id)
+  const isHero = isHeroEmail(session?.user?.email, post.heroEmail)
+  if (!isAuthor && !isHero) {
     redirect(`/posts/${id}`)
   }
 

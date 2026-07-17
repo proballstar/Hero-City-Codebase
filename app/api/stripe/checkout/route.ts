@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getStripe, stripeConfigured } from '@/lib/stripe'
+import { appOrigin } from '@/lib/appUrl'
 
 export async function POST(req: NextRequest) {
   if (!stripeConfigured()) {
@@ -26,14 +27,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Post not found.' }, { status: 404 })
   }
 
-  // Prefer the canonical app URL over the request origin: behind proxies
-  // (Codespaces port forwarding, some hosts) forwarded headers can produce a
-  // scheme/host the browser can't actually reach. AUTH_URL already serves as
-  // the canonical URL for sign-in redirects, so reuse it here.
-  const configuredUrl = process.env.APP_URL ?? process.env.AUTH_URL
-  const origin = configuredUrl
-    ? new URL(configuredUrl).origin
-    : req.nextUrl.origin
+  const origin = appOrigin(req.nextUrl.origin)
   try {
     const session = await getStripe().checkout.sessions.create({
       mode: 'payment',

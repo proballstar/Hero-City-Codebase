@@ -8,18 +8,41 @@ datasource db {
 }
 
 model Post {
-  id         String     @id @default(cuid())
+  id         String      @id @default(cuid())
   name       String
   content    String
   /// Display name shown on the post; kept denormalized so posts survive
   /// author account deletion.
   authorName String
-  author     User?      @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  author     User?       @relation(fields: [authorId], references: [id], onDelete: SetNull)
   authorId   String?
+  /// True when the author is telling their own story (author == hero).
+  isOwnStory Boolean     @default(false)
+  /// The hero's email (lowercased). Whoever signs in with this email is the
+  /// hero: they may edit the post and their activity is tracked in events.
+  heroEmail  String?
   image      Image?
   donations  Donation[]
-  createdAt  DateTime   @default(now())
-  updatedAt  DateTime   @updatedAt
+  events     PostEvent[]
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+}
+
+/// Append-only activity log per post: creation, edits, hero invites and
+/// hero engagement (views/edits by the person the story is about).
+model PostEvent {
+  id         String   @id @default(cuid())
+  post       Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  postId     String
+  /// CREATED | EDITED | INVITE_SENT | HERO_VIEWED
+  type       String
+  actorName  String
+  actorEmail String?
+  /// True when the actor is the post's hero (signed in with heroEmail).
+  isHero     Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  @@index([postId, type])
 }
 
 model User {
