@@ -22,9 +22,25 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  const post = await prisma.post.findUnique({ where: { id: postId } })
+  const post = await prisma.post.findUnique({
+    where: { id: postId },
+    include: { heroProfile: true },
+  })
   if (!post) {
     return NextResponse.json({ error: 'Post not found.' }, { status: 404 })
+  }
+  const hero = post.heroProfile
+  if (
+    !hero ||
+    hero.verificationStatus !== 'VERIFIED' ||
+    !hero.stripeAccountId ||
+    hero.payoutsFrozen ||
+    post.flagged
+  ) {
+    return NextResponse.json(
+      { error: 'Donations open after this hero completes verification.' },
+      { status: 403 }
+    )
   }
 
   const origin = appOrigin(req.nextUrl.origin)
@@ -43,6 +59,10 @@ export async function POST(req: NextRequest) {
         },
       ],
       metadata: { postId },
+      payment_intent_data: {
+        transfer_data: { destination: hero.stripeAccountId },
+        metadata: { postId, heroProfileId: hero.id },
+      },
       success_url: `${origin}/posts/${postId}?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${origin}/posts/${postId}`,
     })

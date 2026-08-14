@@ -49,14 +49,16 @@ cp .env.example .env
 | --- | --- |
 | `DATABASE_URL` | PostgreSQL connection string |
 | `STRIPE_SECRET_KEY` | Secret key from the [Stripe dashboard](https://dashboard.stripe.com/apikeys) — `sk_test_...` in development, `sk_live_...` in production |
-| `STRIPE_WEBHOOK_SECRET` | Signing secret for a [webhook endpoint](https://dashboard.stripe.com/webhooks) on `checkout.session.completed` pointing to `<origin>/api/stripe/webhook`. Optional locally |
+| `STRIPE_WEBHOOK_SECRET` | Signing secret for `<origin>/api/webhooks/stripe`; subscribe to `checkout.session.completed`, Connect `account.updated`, and `identity.verification_session.verified` |
+| `APP_URL` | Canonical public origin used in secure claim and Stripe Connect return links |
 | `AUTH_SECRET` | Auth.js session secret — generate with `npx auth secret` |
 | `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET` | Google OAuth credentials ([console](https://console.cloud.google.com/apis/credentials); redirect URI `<origin>/api/auth/callback/google`) |
 | `AUTH_DEV_LOGIN` | `true` enables a passwordless dev-only sign-in provider. Never enable in production |
-| `RESEND_API_KEY` / `EMAIL_FROM` | [Resend](https://resend.com) credentials for hero invite emails. Optional — invites are skipped without them |
+| `RESEND_API_KEY` / `EMAIL_FROM` | [Resend](https://resend.com) credentials for private, expiring hero claim emails |
 
 The app runs without Stripe credentials — the donate section simply shows a
-"not configured" notice until they are set. Donations are recorded twice-safe:
+"not configured" notice until they are set. Donations remain disabled for each
+hero until their Connect account is verified. Completed donations are recorded twice-safe:
 the webhook is the reliable path, and the donor's return from checkout is a
 fallback, with idempotent upserts so double delivery is harmless. The same applies to sign-in: without
 auth credentials the site is read-only (browsing and donating still work).
@@ -86,6 +88,12 @@ Any platform that runs Next.js works (Vercel, Railway, Fly.io, a VPS):
 4. `npm run build && npm start` (on Vercel this is automatic; `prisma generate` runs
    in the build script).
 
+Promote the first administrator after that user has signed in:
+
+```sql
+UPDATE "User" SET "role" = 'ADMIN' WHERE "email" = 'admin@example.com';
+```
+
 ## Project structure
 
 ```
@@ -93,10 +101,12 @@ app/                    App Router pages and API routes
   page.tsx              Home — grid of hero stories
   create/               "Share a Hero" form
   posts/[id]/           Story page with Markdown content + donations
+  claim/[token]/        Authenticated Stripe Connect claim/onboarding flow
+  admin/verifications/  Admin claim, KYC, evidence, and payout review queue
   api/posts/            List/create posts (multipart upload)
   api/images/[id]/      Serves cover images from the database
-  api/stripe/checkout/  Creates Stripe Checkout sessions
-  api/stripe/webhook/   Records completed donations (signature-verified)
+  api/donate/checkout/  Creates verified destination-charge Checkout sessions
+  api/webhooks/stripe/  Donation and Connect verification webhooks
 components/             Client components (create form, donate section)
 lib/                    Prisma client singleton, Stripe helpers
 prisma/                 Schema and migrations (Post, Image, Donation)
@@ -111,5 +121,6 @@ prisma/                 Schema and migrations (Post, Image, Donation)
 | `PATCH /api/posts/:id` | Update a post — author only |
 | `DELETE /api/posts/:id` | Delete a post — author only |
 | `GET /api/images/:id` | Cover image bytes |
-| `POST /api/stripe/checkout` | Start a Stripe Checkout session (`{ postId, amount }`), returns the redirect URL |
-| `POST /api/stripe/webhook` | Stripe webhook (`checkout.session.completed`) — records the donation |
+| `POST /api/hero-claims` | Create and email a 7-day story claim (`{ postId, email }`) |
+| `POST /api/donate/checkout` | Start a destination-charge Checkout session for a verified hero |
+| `POST /api/webhooks/stripe` | Signature-verified donation, Connect account, and identity events |

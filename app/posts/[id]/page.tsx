@@ -9,6 +9,7 @@ import { isHeroEmail, normalizeEmail } from '@/lib/hero'
 import DonateSection from '@/components/DonateSection'
 import DeletePostButton from '@/components/DeletePostButton'
 import PostHistory from '@/components/PostHistory'
+import ClaimProfileButton from '@/components/ClaimProfileButton'
 
 export const dynamic = 'force-dynamic'
 
@@ -47,6 +48,7 @@ export default async function PostPage({
         orderBy: { createdAt: 'desc' },
       },
       events: { orderBy: { createdAt: 'desc' } },
+      heroProfile: true,
     },
   })
 
@@ -132,6 +134,15 @@ export default async function PostPage({
               {isAuthor ? <DeletePostButton postId={post.id} /> : null}
             </div>
           ) : null}
+          {post.heroProfile?.verificationStatus !== 'VERIFIED' ? (
+            <div className="mt-4">
+              <ClaimProfileButton postId={post.id} />
+            </div>
+          ) : (
+            <div className="mt-4 inline-flex rounded-full bg-green-50 px-3 py-1 text-xs font-semibold text-green-700">
+              ✓ Identity and payouts verified
+            </div>
+          )}
           <div className="prose prose-slate mt-6 max-w-none">
             <ReactMarkdown remarkPlugins={[remarkGfm]}>{post.content}</ReactMarkdown>
           </div>
@@ -156,7 +167,20 @@ export default async function PostPage({
           </p>
         )}
         <div className="mt-4">
-          <DonateSection postId={post.id} enabled={stripeConfigured()} />
+          <DonateSection
+            postId={post.id}
+            enabled={Boolean(
+              stripeConfigured() &&
+                post.heroProfile?.verificationStatus === 'VERIFIED' &&
+                !post.heroProfile.payoutsFrozen &&
+                !post.flagged
+            )}
+            disabledReason={
+              stripeConfigured()
+                ? 'Donations open after this hero completes identity and payout verification.'
+                : undefined
+            }
+          />
         </div>
       </div>
 

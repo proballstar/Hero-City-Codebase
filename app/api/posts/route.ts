@@ -2,8 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/auth'
 import { normalizeEmail } from '@/lib/hero'
-import { sendHeroInvite } from '@/lib/email'
-import { appOrigin } from '@/lib/appUrl'
+import { issueAndSendClaim } from '@/lib/claim-email'
 import { readImageField, postFieldsError, MAX_PAGE_SIZE } from './shared'
 
 export async function GET(req: NextRequest) {
@@ -72,46 +71,54 @@ export async function POST(req: NextRequest) {
   if (image instanceof NextResponse) return image
 
   const actorName = session.user.name ?? session.user.email ?? 'Anonymous'
-  const post = await prisma.post.create({
-    data: {
-      name,
-      content,
-      authorId: session.user.id,
-      authorName: actorName,
-      isOwnStory,
-      heroEmail,
-      ...(image ? { image: { create: await image.load() } } : {}),
-      events: {
-        create: {
-          type: 'CREATED',
-          actorName,
-          actorEmail: sessionEmail,
-          isHero: isOwnStory,
+  const imageData = image ? await image.load() : null
+  const post = await prisma.$transaction(async (tx) => {
+    const heroProfile = await tx.heroProfile.create({
+      data: {
+        heroName: name,
+        contactEmail: heroEmail,
+        ...(isOwnStory ? { claimedByUserId: session.user.id } : {}),
+      },
+    })
+    return tx.post.create({
+      data: {
+        name,
+        content,
+        authorId: session.user.id,
+        authorName: actorName,
+        isOwnStory,
+        heroEmail,
+        heroProfileId: heroProfile.id,
+        ...(imageData ? { image: { create: imageData } } : {}),
+        events: {
+          create: {
+            type: 'CREATED',
+            actorName,
+            actorEmail: sessionEmail,
+            isHero: isOwnStory,
+          },
         },
       },
-    },
+    })
   })
 
   // Invite the hero by email when the story is about someone else. Best
   // effort: a missing email provider or a failed send never blocks the post.
-  if (!isOwnStory && heroEmail && heroEmail !== sessionEmail) {
-    const origin = appOrigin(req.nextUrl.origin)
-    const sent = await sendHeroInvite({
-      to: heroEmail,
-      postName: name,
-      postUrl: `${origin}/posts/${post.id}`,
-      authorName: actorName,
-    }).catch(() => false)
-    if (sent) {
-      await prisma.postEvent.create({
-        data: {
-          postId: post.id,
-          type: 'INVITE_SENT',
-          actorName,
-          actorEmail: sessionEmail,
-        },
-      })
-    }
+  if (!isOwnStory && heroEmail && heroEmail !== sessionEmail && post.heroProfileId) {
+    const { sent } = await issueAndSendClaim({
+      heroProfileId: post.heroProfileId,
+      heroName: name,
+      email: heroEmail,
+      fallbackOrigin: req.nextUrl.origin,
+    })
+    await prisma.postEvent.create({
+      data: {
+        postId: post.id,
+        type: sent ? 'CLAIM_INVITE_SENT' : 'CLAIM_INVITE_CREATED',
+        actorName,
+        actorEmail: sessionEmail,
+      },
+    })
   }
 
   return NextResponse.json({ id: post.id }, { status: 201 })

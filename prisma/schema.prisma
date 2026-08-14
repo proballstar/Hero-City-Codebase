@@ -7,25 +7,105 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum VerificationStatus {
+  UNVERIFIED
+  PENDING_CLAIM
+  VERIFIED
+}
+
+enum UserRole {
+  USER
+  ADMIN
+}
+
 model Post {
-  id         String      @id @default(cuid())
-  name       String
-  content    String
+  id            String       @id @default(cuid())
+  name          String
+  content       String
   /// Display name shown on the post; kept denormalized so posts survive
   /// author account deletion.
-  authorName String
-  author     User?       @relation(fields: [authorId], references: [id], onDelete: SetNull)
-  authorId   String?
+  authorName    String
+  author        User?        @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  authorId      String?
   /// True when the author is telling their own story (author == hero).
-  isOwnStory Boolean     @default(false)
+  isOwnStory    Boolean      @default(false)
   /// The hero's email (lowercased). Whoever signs in with this email is the
   /// hero: they may edit the post and their activity is tracked in events.
-  heroEmail  String?
-  image      Image?
-  donations  Donation[]
-  events     PostEvent[]
-  createdAt  DateTime    @default(now())
-  updatedAt  DateTime    @updatedAt
+  heroEmail     String?
+  heroProfile   HeroProfile? @relation(fields: [heroProfileId], references: [id], onDelete: SetNull)
+  heroProfileId String?
+  flagged       Boolean      @default(false)
+  image         Image?
+  donations     Donation[]
+  events        PostEvent[]
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  @@index([heroProfileId])
+}
+
+/// The canonical identity and payout destination for a hero. Existing Post
+/// records are stories in the product UI, so the relation is named stories.
+model HeroProfile {
+  id                     String                 @id @default(cuid())
+  heroName               String
+  bio                    String?
+  verificationStatus     VerificationStatus     @default(UNVERIFIED)
+  stripeAccountId        String?                @unique
+  contactEmail           String?
+  claimedByUser          User?                  @relation(fields: [claimedByUserId], references: [id], onDelete: SetNull)
+  claimedByUserId        String?
+  stories                Post[]
+  claimTokens            HeroClaimToken[]
+  verificationEvents     VerificationEvent[]
+  evidence               VerificationEvidence[]
+  stripeIdentityVerified Boolean                @default(false)
+  payoutsFrozen          Boolean                @default(false)
+  externalProofUrl       String?
+  createdAt              DateTime               @default(now())
+  updatedAt              DateTime               @updatedAt
+
+  @@index([verificationStatus])
+  @@index([claimedByUserId])
+}
+
+model VerificationEvidence {
+  id            String      @id @default(cuid())
+  heroProfile   HeroProfile @relation(fields: [heroProfileId], references: [id], onDelete: Cascade)
+  heroProfileId String
+  label         String
+  kind          String
+  url           String
+  createdAt     DateTime    @default(now())
+
+  @@index([heroProfileId, createdAt])
+}
+
+model HeroClaimToken {
+  id            String      @id @default(cuid())
+  /// SHA-256 digest of the 256-bit secret sent by email.
+  token         String      @unique
+  heroProfile   HeroProfile @relation(fields: [heroProfileId], references: [id], onDelete: Cascade)
+  heroProfileId String
+  email         String
+  expiresAt     DateTime
+  used          Boolean     @default(false)
+  createdAt     DateTime    @default(now())
+
+  @@index([heroProfileId, used])
+  @@index([email])
+}
+
+model VerificationEvent {
+  id            String      @id @default(cuid())
+  heroProfile   HeroProfile @relation(fields: [heroProfileId], references: [id], onDelete: Cascade)
+  heroProfileId String
+  type          String
+  actorUserId   String?
+  details       String?
+  createdAt     DateTime    @default(now())
+
+  @@index([heroProfileId, createdAt])
 }
 
 /// Append-only activity log per post: creation, edits, hero invites and
@@ -46,14 +126,16 @@ model PostEvent {
 }
 
 model User {
-  id            String    @id @default(cuid())
+  id            String        @id @default(cuid())
   name          String?
-  email         String?   @unique
+  email         String?       @unique
   emailVerified DateTime?
   image         String?
   accounts      Account[]
   sessions      Session[]
   posts         Post[]
+  role          UserRole      @default(USER)
+  claimedHeroes HeroProfile[]
 }
 
 model Account {

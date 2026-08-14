@@ -21,6 +21,7 @@ export default async function EditPostPage({
       content: true,
       authorId: true,
       heroEmail: true,
+      isOwnStory: true,
       image: { select: { id: true } },
     },
   })
@@ -42,6 +43,8 @@ export default async function EditPostPage({
             name: post.name,
             content: post.content,
             hasImage: Boolean(post.image),
+            heroEmail: post.heroEmail,
+            canManageHeroContact: isAuthor && !post.isOwnStory,
           }}
         />
       </div>

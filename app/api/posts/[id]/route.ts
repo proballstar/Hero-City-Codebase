@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { auth } from '@/auth'
 import { isHeroEmail, normalizeEmail } from '@/lib/hero'
 import { readImageField, postFieldsError } from '../shared'
+import { issueAndSendClaim } from '@/lib/claim-email'
 
 type Access =
   | { denied: NextResponse }
@@ -17,7 +18,7 @@ async function postAccess(id: string): Promise<Access> {
   }
   const post = await prisma.post.findUnique({
     where: { id },
-    select: { authorId: true, heroEmail: true },
+    select: { authorId: true, heroEmail: true, heroProfileId: true },
   })
   if (!post) {
     return { denied: NextResponse.json({ error: 'Post not found.' }, { status: 404 }) }
@@ -46,6 +47,7 @@ export async function PATCH(
   const formData = await req.formData()
   const name = String(formData.get('name') ?? '').trim()
   const content = String(formData.get('content') ?? '').trim()
+  const requestedHeroEmail = normalizeEmail(String(formData.get('heroEmail') ?? ''))
 
   const fieldsError = postFieldsError(name, content)
   if (fieldsError) return NextResponse.json({ error: fieldsError }, { status: 400 })
@@ -55,11 +57,19 @@ export async function PATCH(
   const imageData = image ? await image.load() : null
 
   const { session, isHero } = access
-  await prisma.post.update({
+  const post = await prisma.post.update({
     where: { id },
     data: {
       name,
       content,
+      ...(access.isAuthor && requestedHeroEmail
+        ? {
+            heroEmail: requestedHeroEmail,
+            heroProfile: {
+              update: { heroName: name, contactEmail: requestedHeroEmail },
+            },
+          }
+        : { heroProfile: { update: { heroName: name } } }),
       // A newly uploaded cover replaces the existing one; omitting the field
       // keeps the current cover.
       ...(imageData
@@ -74,7 +84,17 @@ export async function PATCH(
         },
       },
     },
+    select: { id: true, heroProfileId: true, heroEmail: true },
   })
+
+  if (access.isAuthor && requestedHeroEmail && post.heroProfileId) {
+    await issueAndSendClaim({
+      heroProfileId: post.heroProfileId,
+      heroName: name,
+      email: requestedHeroEmail,
+      fallbackOrigin: req.nextUrl.origin,
+    })
+  }
 
   return NextResponse.json({ id })
 }

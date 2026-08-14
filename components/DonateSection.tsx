@@ -7,9 +7,11 @@ const PRESET_AMOUNTS = ['5', '10', '25']
 export default function DonateSection({
   postId,
   enabled,
+  disabledReason,
 }: {
   postId: string
   enabled: boolean
+  disabledReason?: string
 }) {
   const [amount, setAmount] = useState('5')
   const [busy, setBusy] = useState(false)
@@ -18,8 +20,9 @@ export default function DonateSection({
   if (!enabled) {
     return (
       <p className="rounded-lg bg-amber-50 p-4 text-sm text-amber-800">
-        Donations are not configured yet. The site owner needs to set{' '}
-        <code>STRIPE_SECRET_KEY</code> (see the README).
+        {disabledReason ?? (
+          <>Donations are not configured yet. The site owner needs to set <code>STRIPE_SECRET_KEY</code>.</>
+        )}
       </p>
     )
   }
@@ -28,7 +31,7 @@ export default function DonateSection({
     setBusy(true)
     setError(null)
     try {
-      const res = await fetch('/api/stripe/checkout', {
+      const res = await fetch('/api/donate/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ postId, amount }),

@@ -8,7 +8,14 @@ const MAX_IMAGE_BYTES = 2 * 1024 * 1024
 export default function PostForm({
   post,
 }: {
-  post?: { id: string; name: string; content: string; hasImage: boolean }
+  post?: {
+    id: string
+    name: string
+    content: string
+    hasImage: boolean
+    heroEmail?: string | null
+    canManageHeroContact?: boolean
+  }
 }) {
   const router = useRouter()
   const [submitting, setSubmitting] = useState(false)
@@ -121,6 +128,21 @@ export default function PostForm({
             </label>
           </div>
         </fieldset>
+      ) : post.canManageHeroContact ? (
+        <div>
+          <label htmlFor="heroEmail" className="block text-sm font-semibold">
+            Hero&apos;s contact email{' '}
+            <span className="font-normal text-slate-500">(sends a new 7-day claim link)</span>
+          </label>
+          <input
+            id="heroEmail"
+            name="heroEmail"
+            type="email"
+            maxLength={254}
+            defaultValue={post.heroEmail ?? ''}
+            className={inputClass}
+          />
+        </div>
       ) : null}
 
       <div>
